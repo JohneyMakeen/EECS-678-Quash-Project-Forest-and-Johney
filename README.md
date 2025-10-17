@@ -1,1 +1,1 @@
-# EECS-678-Quash-Project---Forest-and-Johney
+# EECS-678-Quash-Project-Forest-and-Johney

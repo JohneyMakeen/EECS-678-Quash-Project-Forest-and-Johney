@@ -5,7 +5,7 @@
 #include <string.h> // strcmp, strcspn  string helpers
 #include <unistd.h> // fork, execlp
 #include <sys/types.h> // pid_t
-#include <sys/wait.h> //wait
+#include <sys/wait.h> //waits
 
 int main(void) {
 /*  - input line will hold whatever text the user inputes. 
@@ -87,8 +87,3 @@ and allocates memory for it
     printf("Adios Amigo!\n");
     return 0;
 }
-
-
-
-
-

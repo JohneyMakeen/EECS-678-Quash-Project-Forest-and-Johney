@@ -1,4 +1,4 @@
-/*  */
+
 #define _GNU_SOURCE // enables GNU extension for getline()
 #include <stdio.h> // I/O and printf, getline, perror
 #include <stdlib.h> //  exit and free
@@ -35,12 +35,41 @@ and replaces it with a string terminator (so \n is gone), and marks the end of a
  */
 
         input_line[strcspn(input_line, "\n")] = '\0';
+
+        if (input_line[0] == '\0')
+        continue; //ignoring blank input, that way no error occurs and program does not end
+
 /* strcmp = string compare: makes it easier where if the user types exit or quit:
 it will end the program.
 */
         if (strcmp(input_line, "exit") == 0 || strcmp(input_line, "quit") == 0)
             break;
 
+/* pwd command: 
+- getcwd (current working directory) will ask the OS for the current directory path
+and allocates memory for it
+*/
+
+        if (strcmp(input_line, "pwd") == 0) { //checks if the command is pwd
+            char* cwd = getcwd(NULL, 0); 
+            if (cwd) { //if its sucessful, print it and release the memory afterward. 
+                printf("%s\n", cwd);
+                free(cwd);
+            } else {
+                perror("pwd");
+            }
+            continue; //skips the fork/exec part
+        }
+ /* checks the first 5 characthers to be echo, since echo is 4 characthers 
+ and then the space (makes it 5). 
+ as soon as it matches echo_, it means the user
+ typed echo_ ____.  then print the new text after echo (user message). 
+ */       
+        if (strncmp(input_line, "echo ", 5) == 0) { 
+            printf("%s\n", input_line + 5);
+            continue;
+        }
+        
         pid_t pid = fork(); //creating a child process: pid == 0 in child
         if (pid == 0) { //Child Process
             execlp(input_line, input_line, NULL); /*uses execlp to replace itself with the program
@@ -58,4 +87,8 @@ it will end the program.
     printf("Adios Amigo!\n");
     return 0;
 }
+
+
+
+
 

@@ -1,17 +1,6 @@
+#include "quash.h"
 
-#define _GNU_SOURCE // enables GNU extension for getline()
-#include <stdio.h> // I/O and printf, getline, perror
-#include <stdlib.h> //  exit and free
-#include <string.h> // strcmp, strcspn  string helpers
-#include <unistd.h> // fork, execlp
-#include <sys/types.h> // pid_t
-#include <sys/wait.h> //waits
-#include <stdbool.h> // booleans
 
-char **split_into_args(const char *input);
-char *run_args(char **argv);
-char *pwd(void);
-int array_length(char **arr);
 int main(void){
     /*  - input line will hold whatever text the user inputes. 
     - getline() will allocate/resize it.
@@ -57,16 +46,17 @@ int main(void){
         //         free(argv[argv_len -1]);
 
         //         /* TODO:
-        //         Make a function that takes in the argvs, and runs them as a background process to the run_args function
+        //         Make a function that takes in the argv, and runs them as a background process to the run_args function
         //         */
 
         //         continue; // if we've started the execution, we can go back to the beginning while it works in the background
         //     }
         // }
-        if (strcmp(argv[0], "exit") == 0 || strcmp(argv[0], "quit") == 0){  // if the command is quit or exit. Need to run this before the rest
+        if (strcmp(argv[0], "exit") == 0 || strcmp(argv[0], "quit") == 0){  // if the first command is quit or exit, break and stop. Need to run this before the rest
             break;
         }
 
+<<<<<<< HEAD
         char *result = run_args(argv);
         printf("%s\n", result);
         free(result);
@@ -78,7 +68,11 @@ int main(void){
 
     
 
+=======
+        printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
+>>>>>>> 44999b7fd18698ea09d52bddc4a0b0f5b4f6fac7
     }
+
     // at this point, the quash program is ending, and we're just freeing memory
     free(input_line);
     // now to free up args
@@ -114,7 +108,12 @@ char *join_args(char **argv, int start) {
 }
 
 char *run_args(char **argv){  // recursive function that calls all the command
+    int arg_num = 0;  // index to what argument we're on
+    char *output = malloc(100);  // what is being outputed by the current function, can also be used to redirect output
+    
+    while (argv[arg_num] != NULL){ // while there's still argument needing to be made
 
+<<<<<<< HEAD
     if (strcmp(argv[0], "pwd") == 0){
         return pwd();
     }else if (strcmp(argv[0], "echo") == 0) {
@@ -123,6 +122,21 @@ char *run_args(char **argv){  // recursive function that calls all the command
     } else {
         return strdup("Invalid argument");
     }
+=======
+        if (strcmp(argv[0], "pwd") == 0){
+         char *temp= pwd();  // the current output is now the pwd result
+         realloc(*output)
+         arg_num += 1;  // now we move up the argument
+        }else{  // if we haven't found the argument yet
+            snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
+            break; // then stop running the args
+        }
+    }
+    // now we're done running arguments
+    return output;
+
+
+>>>>>>> 44999b7fd18698ea09d52bddc4a0b0f5b4f6fac7
 }
 
 /* pwd command: 
@@ -164,7 +178,8 @@ char **split_into_args(const char *input){  // turns a input string into a space
                 free(temp);
                 return NULL;
                 }
-            result = new_result;
+            result = as an argument, which will just be the directory you want to change to
+      |          ~~~~~~^~~~new_result;
             }
         result[i++] = strdup(token);
         token = strtok(NULL, " ");
@@ -174,7 +189,7 @@ char **split_into_args(const char *input){  // turns a input string into a space
     return result;
 }
 
-int array_length(char **arr) {
+int array_length(char **arr) {  // helper function to determine size of an array
     int count = 0;
     while (arr[count] != NULL) {
         count++;
@@ -205,4 +220,22 @@ bool is_valid_function(const char *func){  // helper function to determine if a 
 
     return false; // But if nothings returned true yet, then we don't have any valid code
 }
+
+char *export(char *argv){  // will only take in 1 string as a argument, aka what to change the path to
+
+    return ""; // once it's finished changing the path variable, just return an empty string
+}
+
+char *cd(char *argv){  // will take in 1 string as an argument, which will just be the directory you want to change to
+
+    return ""; // returns a empty string wants it's done
+
+}
+
+
+
+
+
+
+
 

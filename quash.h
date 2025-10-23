@@ -12,3 +12,5 @@ char *run_args(char **argv);
 char *pwd(void);
 int array_length(char **arr);
 int main(void);
+char *cd(char *argv);
+char *export(char *argv);

@@ -182,3 +182,72 @@ char *cd(char *argv){  // will take in 1 string as an argument, which will just 
     return ""; // returns a empty string wants it's done
 
 }
+
+
+char *join_args(char **argv, int start) {
+
+
+    int total_len = 0;
+
+
+    int count = 0;
+
+
+
+
+
+    for (int i = start; argv[i] != NULL; i++) {
+
+
+        total_len += strlen(argv[i]) + 1;
+
+
+        count++;
+
+
+    }
+
+
+
+
+
+    if (count == 0) {
+
+
+        return strdup(""); //echo with no arguments 
+
+
+    }
+
+
+    char *result = malloc(total_len);
+
+
+    if (!result) return NULL;
+
+
+    result[0] = '\0';
+
+
+
+
+
+    for (int i = start; argv[i]; i++) {
+
+
+        strcat(result, argv[i]);
+
+
+        if (argv[i + 1] != NULL)
+
+
+            strcat(result," ");
+
+
+    } 
+
+
+    return result;
+
+
+}

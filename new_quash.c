@@ -56,21 +56,7 @@ int main(void){
             break;
         }
 
-<<<<<<< HEAD
-        char *result = run_args(argv);
-        printf("%s\n", result);
-        free(result);
-
-
-        
-
-
-
-    
-
-=======
         printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
->>>>>>> 44999b7fd18698ea09d52bddc4a0b0f5b4f6fac7
     }
 
     // at this point, the quash program is ending, and we're just freeing memory
@@ -83,29 +69,6 @@ int main(void){
     printf("Adios Amigo!\n");
     return 0;
 }
-char *join_args(char **argv, int start) {
-    int total_len = 0;
-    int count = 0;
-
-    for (int i = start; argv[i] != NULL; i++) {
-        total_len += strlen(argv[i]) + 1;
-        count++;
-    }
-
-    if (count == 0) {
-        return strdup(""); //echo with no arguments 
-    }
-    char *result = malloc(total_len);
-    if (!result) return NULL;
-    result[0] = '\0';
-
-    for (int i = start; argv[i]; i++) {
-        strcat(result, argv[i]);
-        if (argv[i + 1] != NULL)
-            strcat(result," ");
-    } 
-    return result;
-}
 
 char *run_args(char **argv){  // recursive function that calls all the command
     int arg_num = 0;  // index to what argument we're on
@@ -113,16 +76,6 @@ char *run_args(char **argv){  // recursive function that calls all the command
     
     while (argv[arg_num] != NULL){ // while there's still argument needing to be made
 
-<<<<<<< HEAD
-    if (strcmp(argv[0], "pwd") == 0){
-        return pwd();
-    }else if (strcmp(argv[0], "echo") == 0) {
-        char *joined = join_args(argv, 1);
-        return joined;
-    } else {
-        return strdup("Invalid argument");
-    }
-=======
         if (strcmp(argv[0], "pwd") == 0){
          char *temp= pwd();  // the current output is now the pwd result
          realloc(*output)
@@ -136,7 +89,6 @@ char *run_args(char **argv){  // recursive function that calls all the command
     return output;
 
 
->>>>>>> 44999b7fd18698ea09d52bddc4a0b0f5b4f6fac7
 }
 
 /* pwd command: 
@@ -152,7 +104,6 @@ char *pwd(){  // this'll be the general structure. Have ea
     }
 
 }
-
 
 char **split_into_args(const char *input){  // turns a input string into a space delimanted char array
     char* temp = strdup(input);  // duplicate string since strtok modifies it
@@ -221,3 +172,13 @@ bool is_valid_function(const char *func){  // helper function to determine if a 
     return false; // But if nothings returned true yet, then we don't have any valid code
 }
 
+char *export(char *argv){  // will only take in 1 string as a argument, aka what to change the path to
+
+    return ""; // once it's finished changing the path variable, just return an empty string
+}
+
+char *cd(char *argv){  // will take in 1 string as an argument, which will just be the directory you want to change to
+
+    return ""; // returns a empty string wants it's done
+
+}

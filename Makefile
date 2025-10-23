@@ -1,10 +1,10 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
 
-all: quash
+all: new_quash
 
-quash: quash.c
+quash: new_quash.c
 	$(CC) $(CFLAGS) -o quash quash.c
 
 clean:
-	rm -f quash
+	rm -f new_quash

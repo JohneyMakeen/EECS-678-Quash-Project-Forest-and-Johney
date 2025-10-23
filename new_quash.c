@@ -67,7 +67,9 @@ int main(void){
             break;
         }
 
-        printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
+        char *result = run_args(argv);
+        printf("%s\n", result);
+        free(result);
 
 
         
@@ -87,15 +89,40 @@ int main(void){
     printf("Adios Amigo!\n");
     return 0;
 }
+char *join_args(char **argv, int start) {
+    int total_len = 0;
+    int count = 0;
+
+    for (int i = start; argv[i] != NULL; i++) {
+        total_len += strlen(argv[i]) + 1;
+        count++;
+    }
+
+    if (count == 0) {
+        return strdup(""); //echo with no arguments 
+    }
+    char *result = malloc(total_len);
+    if (!result) return NULL;
+    result[0] = '\0';
+
+    for (int i = start; argv[i]; i++) {
+        strcat(result, argv[i]);
+        if (argv[i + 1] != NULL)
+            strcat(result," ");
+    } 
+    return result;
+}
 
 char *run_args(char **argv){  // recursive function that calls all the command
 
     if (strcmp(argv[0], "pwd") == 0){
         return pwd();
-    }else{
-        return "Invalid argument";
+    }else if (strcmp(argv[0], "echo") == 0) {
+        char *joined = join_args(argv, 1);
+        return joined;
+    } else {
+        return strdup("Invalid argument");
     }
-
 }
 
 /* pwd command: 
@@ -111,6 +138,7 @@ char *pwd(){  // this'll be the general structure. Have ea
     }
 
 }
+
 
 char **split_into_args(const char *input){  // turns a input string into a space delimanted char array
     char* temp = strdup(input);  // duplicate string since strtok modifies it

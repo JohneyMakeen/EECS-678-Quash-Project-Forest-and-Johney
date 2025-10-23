@@ -129,8 +129,7 @@ char **split_into_args(const char *input){  // turns a input string into a space
                 free(temp);
                 return NULL;
                 }
-            result = as an argument, which will just be the directory you want to change to
-      |          ~~~~~~^~~~new_result;
+            result = new_result;
             }
         result[i++] = strdup(token);
         token = strtok(NULL, " ");

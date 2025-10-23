@@ -221,3 +221,21 @@ bool is_valid_function(const char *func){  // helper function to determine if a 
     return false; // But if nothings returned true yet, then we don't have any valid code
 }
 
+char *export(char *argv){  // will only take in 1 string as a argument, aka what to change the path to
+
+    return ""; // once it's finished changing the path variable, just return an empty string
+}
+
+char *cd(char *argv){  // will take in 1 string as an argument, which will just be the directory you want to change to
+
+    return ""; // returns a empty string wants it's done
+
+}
+
+
+
+
+
+
+
+

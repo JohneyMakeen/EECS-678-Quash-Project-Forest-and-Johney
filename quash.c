@@ -14,7 +14,7 @@ int main(void) {
  */
     char *input_line = NULL; 
     size_t buffer_size = 0;
-
+    
     printf("Welcome to Johney and Forest Quash!\n");
 
     while (1) { //infinite loop for the shell prompt cycle
@@ -86,4 +86,29 @@ and allocates memory for it
     free(input_line); //to prevent memory leak: done with memory. otherwise remains in use.
     printf("Adios Amigo!\n");
     return 0;
+
+
+bool is_valid_function(const char *func){  // helper function to determine if a str is a valid quash function
+    const char *valid_funcs[] = {
+        "cd",
+        "pwd",
+        "echo",
+        "set",
+        "export",
+        "jobs",
+        "kill",
+        "quit",
+        NULL // NULL terminated array
+    };
+    if (strncmp(func, "./", 2) == 0) { // if it's a ./ function, likely with a executable to run
+        struct stat sb;
+    } 
+
+    for (int i = 0; valid_funcs[i] != NULL; i++) {  // for every one of our valid functions
+        if (strcmp(func, valid_funcs[i]) == 0) { // if it's a regular quash function
+            return true;  // then we return true
+        }
+    }
+
+    return false; // But if nothings returned true yet, then we don't have any valid code
 }

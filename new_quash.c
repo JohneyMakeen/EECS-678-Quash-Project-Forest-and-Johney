@@ -188,6 +188,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             //     strncat(output, msg, 255 - strlen(output));
             // }
             output = "";
+            input[0] = '\0';
 
             continue;
         }
@@ -210,6 +211,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
                 if (msg && msg[0] != '\0') {
                     strncat(output, msg, 255 - strlen(output));
                 }
+                input[0] = '\0';
 
             }
         }
@@ -218,7 +220,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             arg_num++; // make is so we're looking at the arguments
             output[0] = '\0';
             char piece[512]; // if we're echoing, we're starting with a new output
-            if (input[0] == '\0'){
+            if (input[0] == '\0'){ // if we're not using outside input
                 for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stop
                     if (strcmp(argv[arg_num],"|" ) == 0 || 
                         strcmp(argv[arg_num],">" ) == 0 || 
@@ -232,6 +234,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
                     }
                     strncat(output, piece, 255 - strlen(output));
                 }
+                // printf("from echo: %s\n", output);
                 continue;
             }
             else{  // if we have outside input
@@ -240,36 +243,51 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
                         strncat(output, " ", 255 - strlen(output));
                     }
                     strncat(output, piece, 255 - strlen(output));
+                    input[0] = '\0';
                     continue;
                 }
         }
 
         
-        else{  // if we haven't found the argument yet
+        else{  // if we haven't found the argument yet, we're going to assume it's a linux command
             // printf("invalid argument: %s\n", argv[arg_num]);
             // it might be a linux system function, so we need to prepare it
             output[0] = '\0'; // if we're changing it, we're starting with a new output
-            for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stopping symbol
-                if (strcmp(argv[arg_num],"|" ) == 0 || 
-                    strcmp(argv[arg_num],">" ) == 0 || 
-                    strcmp(argv[arg_num],"#") == 0 || 
-                    strcmp(argv[arg_num],">>" ) == 0){
-                    break; // if there's any strings that break the regular flow of the function
+            if (input[0]=='\0'){
+                for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stopping symbol
+                    if (strcmp(argv[arg_num],"|" ) == 0 || 
+                        strcmp(argv[arg_num],">" ) == 0 || 
+                        strcmp(argv[arg_num],"#") == 0 || 
+                        strcmp(argv[arg_num],">>" ) == 0){
+                        arg_num--; // just to ensure we don't go past this later
+                        break; // if there's any strings that break the regular flow of the function
+                    }
+                    if (output[0] == '\0'){  // if output is empty
+                        strcpy(output, argv[arg_num]);  // just set it equal to the argument
+                    }else{
+                        strncat(output, " ", strlen(" "));
+                        strncat(output, argv[arg_num], strlen(argv[arg_num])); // concatinate the two together
+                    }
                 }
-                if (output[0] == '\0'){  // if output is empty
-                    strcpy(output, argv[arg_num]);  // just set it equal to the argument
-                }else{
-                    strncat(output, " ", strlen(" "));
-                    strncat(output, argv[arg_num], strlen(argv[arg_num])); // concatinate the two together
+                arg_num++;
+                output = run_command(output);
+            }else{  // if we have outside input
+                if (output[0] == '\0'){
+                    strcpy(output, argv[arg_num]); // make it so the output has the linux command
                 }
-            }
+                strncat(output, " ", 1);
+                strncat(output, input, strlen(input));
+                output = run_command(output);
+                input[0] = '\0'; // now we need to clear the input
+                arg_num++;
+                }
+            
             // now to call have our output put into the linux system calls
-            output = run_command(output);
-            arg_num++;
+        }
 
             // snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
-        }
     }
+
     // now we're done running arguments
     free(input);
     return output;

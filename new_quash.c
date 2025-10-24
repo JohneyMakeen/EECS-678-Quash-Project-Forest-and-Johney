@@ -241,6 +241,18 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             output[0] = '\0';
             char piece[512]; // if we're echoing, we're starting with a new output
             if (input[0] == '\0'){ // if we're not using outside input
+                if(strcmp(argv[arg_num],"<") == 0){  // if we're needing to take a file as input
+                    arg_num++; // no longer looking at "<"
+                    expand_env_token(read_file(argv[arg_num]), piece, sizeof(piece));
+                    if (output[0] != '\0'){
+                        strncat(output, " ", 255 - strlen(output));
+                    }
+                    strncat(output, piece, 255 - strlen(output));
+                    arg_num++; // just to make up for the lack of loop
+                    // printf("from echo: %s\n", output);
+                    continue;
+
+                }else{
                 for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stop
                     if (strcmp(argv[arg_num],"|" ) == 0 || 
                         strcmp(argv[arg_num],">" ) == 0 || 
@@ -256,6 +268,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
                 }
                 // printf("from echo: %s\n", output);
                 continue;
+            }
             }
             else{  // if we have outside input
                     expand_env_token(input, piece, sizeof(piece));

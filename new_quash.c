@@ -72,16 +72,59 @@ int main(void){
 
 char *run_args(char **argv){  // recursive function that calls all the command
     int arg_num = 0;  // index to what argument we're on
-    char *output = malloc(100);  // what is being outputed by the current function, can also be used to redirect output
+    char *output = malloc(256);  // what is being outputed by the current function, can also be used to redirect output
+    output[0] = '\0';
+    char *input = malloc(256); // just a string to store the redirected output
     
-    while (argv[arg_num] != NULL){ // while there's still argument needing to be made
+    while (argv[arg_num] != NULL && (strcmp(argv[arg_num],"#" ) != 0)){ // while there's still an argument needing to be executed
+        // printf("curr string: %s\n", argv[arg_num]);
+        if (strcmp(argv[arg_num], "|") == 0){  // piping function skeleton
+            // printf("I'm in the | function! cur arg: %s, next arg: %s, cur arg num:%d\n", argv[arg_num], argv[arg_num+1], arg_num);
+            arg_num++;
+            continue;
+        }
+    
+        if (strcmp(argv[arg_num], ">") == 0){  // > function skeleton
+            arg_num++;
+            continue;
+        }
 
-        if (strcmp(argv[0], "pwd") == 0){
-         char *temp= pwd();  // the current output is now the pwd result
-         realloc(*output)
-         arg_num += 1;  // now we move up the argument
-        }else{  // if we haven't found the argument yet
-            snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
+        if (strcmp(argv[arg_num], ">>") == 0){  // piping function skeleton
+            arg_num++;
+            continue;
+        }
+
+        if (strcmp(argv[arg_num], "pwd") == 0){
+            output = pwd();
+            arg_num++;
+            continue; // and go back to the beginning of the loop
+        }
+        if (strcmp(argv[arg_num], "echo") == 0){
+            arg_num++; // make is so we're looking at the arguments
+            output[0] = '\0'; // if we're echoing, we're starting with a new output
+            for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stop
+                if (strcmp(argv[arg_num],"|" ) == 0 || 
+                    strcmp(argv[arg_num],">" ) == 0 || 
+                    strcmp(argv[arg_num],"#") == 0 || 
+                    strcmp(argv[arg_num],">>" ) == 0){
+                    break; // if there's any strings that break the regular flow of echo
+                }
+
+                if (output[0] == '\0'){  // if output is empty
+                    strcpy(output, argv[arg_num]);  // just set it equal to the argument
+                }else{
+                    strncat(output, " ", strlen(" "));
+                    strncat(output, argv[arg_num], strlen(argv[arg_num])); // concatinate the two together
+                }
+            }
+            continue;
+        }
+
+        
+        else{  // if we haven't found the argument yet
+            // printf("invalid argument: %s\n", argv[arg_num]);
+            output = "Invalid argument ";
+            // snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
             break; // then stop running the args
         }
     }
@@ -95,7 +138,7 @@ char *run_args(char **argv){  // recursive function that calls all the command
 - getcwd (current working directory) will ask the OS for the current directory path
 and allocates memory for it
 */
-char *pwd(){  // this'll be the general structure. Have ea
+char *pwd(){  // this'll be the general structure
     char* cwd = getcwd(NULL, 0); 
     if (cwd) { //if its sucessful, return it
         return cwd;
@@ -179,38 +222,6 @@ char *export(char *argv){  // will only take in 1 string as a argument, aka what
 char *cd(char *argv){  // will take in 1 string as an argument, which will just be the directory you want to change to
 
     return ""; // returns a empty string wants it's done
-
 }
 
 
-char *join_args(char **argv, int start) {
-    int total_len = 0;
-    int count = 0;
-
-
-
-    for (int i = start; argv[i] != NULL; i++) {
-        total_len += strlen(argv[i]) + 1;
-        count++;
-    }
-
-
-
-    if (count == 0) {
-        return strdup(""); //echo with no arguments 
-    }
-    char *result = malloc(total_len);
-    if (!result) return NULL;
-    result[0] = '\0';
-
-
-
-    for (int i = start; argv[i]; i++) {
-        strcat(result, argv[i]);
-        if (argv[i + 1] != NULL)
-            strcat(result," ");
-    } 
-    return result;
-
-
-}

@@ -6,6 +6,7 @@
 #include <sys/types.h> // pid_t
 #include <sys/wait.h> //waits
 #include <stdbool.h> // booleans
+#include <ctype.h> // for isalnum()
 
 char **split_into_args(const char *input);
 char *run_args(char **argv);

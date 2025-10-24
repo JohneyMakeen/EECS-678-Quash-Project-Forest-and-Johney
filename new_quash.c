@@ -1,4 +1,5 @@
 #include "quash.h"
+
 static void free_argv(char **argv) {
     if (!argv) return;
     for (int i = 0; argv[i] != NULL; i++) free(argv[i]);
@@ -65,13 +66,10 @@ int main(void){
             free_argv(argv);
             break;
         }
-        char *res = run_args(argv);
-        if (res && res[0] != '\0') {
-            printf("%s\n", res);
-        }
+
+        printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
         free_argv(argv);
 
-        //printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
     }
 
     // at this point, the quash program is ending, and we're just freeing memory
@@ -86,34 +84,53 @@ int main(void){
     return 0;
 }
 
+static void expand_env_token(const char *tok, char *out, size_t outcap) {
+    if (!tok || !out || outcap == 0) return;
+    out[0] = '\0';
+
+    if (tok[0] != '$') {
+        strncat(out, tok, outcap - 1);
+        return;
+    }
+
+    const char *p = tok + 1;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+        p++;
+    }
+
+    size_t len_of_name = (size_t)(p- (tok + 1));
+
+    if (len_of_name == 0) {
+        strncat(out, tok, outcap - 1);
+        return;
+    }
+
+    char name[256];
+    if (len_of_name >= sizeof(name)) {
+        strncat(out, tok, outcap - 1);
+        return;
+    }
+
+    memcpy(name, tok + 1, len_of_name);
+    name[len_of_name] = '\0';
+
+    const char *val = getenv(name);
+    if (!val) val = ""; // unset means empty
+
+    strncat(out, val, outcap - 1 - strlen(out));
+    strncat(out, p, outcap - 1 - strlen(out));
+}
+
+
 char *run_args(char **argv){  // recursive function that calls all the command
 
-    if (!argv || !argv[0]) return "";
-
-    if (strcmp(argv[0], "pwd") ==0) {
-        return pwd();
-    }
-
-    if (strcmp(argv[0], "cd") == 0) {
-        return cd(argv[1]); 
-    }
-    
-    if (strcmp(argv[0], "export" )== 0) {
-        return export(argv[1]);
-    }
-
-    static char msg[256];
-    snprintf(msg, sizeof msg, "Invalid arg \"%s\"", argv[0]);
-    return msg;
-}
-    /*
     int arg_num = 0;  // index to what argument we're on
     char *output = malloc(256);  // what is being outputed by the current function, can also be used to redirect output
     output[0] = '\0';
     char *input = malloc(256); // just a string to store the redirected output
     
     while (argv[arg_num] != NULL && (strcmp(argv[arg_num],"#" ) != 0)){ // while there's still an argument needing to be executed
-        // printf("curr string: %s\n", argv[arg_num]);
+        // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
         if (strcmp(argv[arg_num], "|") == 0){  // piping function skeleton
             // printf("I'm in the | function! cur arg: %s, next arg: %s, cur arg num:%d\n", argv[arg_num], argv[arg_num+1], arg_num);
             arg_num++;
@@ -131,13 +148,43 @@ char *run_args(char **argv){  // recursive function that calls all the command
         }
 
         if (strcmp(argv[arg_num], "pwd") == 0){
-            output = pwd();
+            char *cwd = pwd();
+            output[0] = '\0';
+            if (cwd) {
+                strncat(output, cwd, 255);
+                free(cwd);
+            } else {
+                strncat(output, "pwd: getcwd failed", 255);
+            }
             arg_num++;
-            continue; // and go back to the beginning of the loop
+            continue;
         }
+        if (strcmp(argv[arg_num], "cd") == 0) {
+            char *msg = cd(argv[arg_num + 1]);
+            output[0] = '\0';
+            if (msg && msg[0] != '\0') {
+                strncat(output, msg, 255 - strlen(output));
+            }
+            if (argv[arg_num + 1] != NULL) arg_num += 2;
+            else arg_num += 1;
+            continue;
+        }
+
+        if (strcmp(argv[arg_num], "export") == 0) {
+            char *msg = export(argv[arg_num + 1]);
+            output[0] = '\0';
+            if (msg && msg[0] != '\0') {
+                strncat(output, msg, 255 - strlen(output));
+            }
+            if (argv[arg_num + 1] != NULL) arg_num += 2;
+            else arg_num += 1;
+            continue;
+        }
+
         if (strcmp(argv[arg_num], "echo") == 0){
             arg_num++; // make is so we're looking at the arguments
-            output[0] = '\0'; // if we're echoing, we're starting with a new output
+            output[0] = '\0';
+            char piece[512]; // if we're echoing, we're starting with a new output
             for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stop
                 if (strcmp(argv[arg_num],"|" ) == 0 || 
                     strcmp(argv[arg_num],">" ) == 0 || 
@@ -145,13 +192,12 @@ char *run_args(char **argv){  // recursive function that calls all the command
                     strcmp(argv[arg_num],">>" ) == 0){
                     break; // if there's any strings that break the regular flow of echo
                 }
+                expand_env_token(argv[arg_num], piece, sizeof(piece));
+                if (output[0] != '\0'){  // if output is empty
+                    strncat(output, " ", 255 - strlen(output));
+                  }  // just set it equal to the argument
 
-                if (output[0] == '\0'){  // if output is empty
-                    strcpy(output, argv[arg_num]);  // just set it equal to the argument
-                }else{
-                    strncat(output, " ", strlen(" "));
-                    strncat(output, argv[arg_num], strlen(argv[arg_num])); // concatinate the two together
-                }
+                strncat(output, piece, 255 - strlen(output)); // concatinate the two together
             }
             continue;
         }
@@ -160,21 +206,14 @@ char *run_args(char **argv){  // recursive function that calls all the command
         else{  // if we haven't found the argument yet
             // printf("invalid argument: %s\n", argv[arg_num]);
             output = "Invalid argument ";
+            break;
             // snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
-    while (argv[arg_num] != NULL){ // while there's still argument needing to be made
-
-        if (strcmp(argv[0], "pwd") == 0){
-         char *temp = pwd();  // the current output is now the pwd result
-         realloc(*output);
-         arg_num += 1;  // now we move up the argument
-        }else{  // if we haven't found the argument yet
-            snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
-            break; // then stop running the args
         }
     }
     // now we're done running arguments
     return output;
-*/
+}
+
 
 
 
@@ -259,6 +298,7 @@ bool is_valid_function(const char *func){  // helper function to determine if a 
 }
 
 char *export(char *argv){  // will only take in 1 string as a argument, aka what to change the path to
+
     if (argv == NULL || argv[0] == '\0'){
         return "export: missing Name or Name = Value";
     }
@@ -289,10 +329,21 @@ char *export(char *argv){  // will only take in 1 string as a argument, aka what
     name[len_of_name] = '\0';    
 
     const char *value = eq + 1;
-    if (setenv(name, value, 1) != 0) {
+
+    if (value[0] == '$' && value[1] != '\0') {
+        const char *exp = getenv(value + 1); //get what $var means
+        if (!exp) exp = ""; //not found
+        if (setenv(name, exp, 1) != 0) {
+            return "export: failed to set variable";
+        }
+
+        return "";
+    }
+
+    if (setenv(name, value, 1)!= 0) {
         return "export: failed to set variable";
     }
-    return ""; //success 
+    return "";
 }
 
 char *cd(char *argv){  // will take in 1 string as an argument, which will just be the directory you want to change to
@@ -333,6 +384,5 @@ char *cd(char *argv){  // will take in 1 string as an argument, which will just 
     if (getcwd(newpwd_buf, sizeof newpwd_buf)) {
         setenv("PWD", newpwd_buf, 1);
     }
-    return ""; }
-
-
+    return "";
+}

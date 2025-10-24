@@ -7,6 +7,7 @@
 #include <sys/wait.h> //waits
 #include <stdbool.h> // booleans
 #include <ctype.h> // for isalnum()
+#include <sys/syscall.h> // for system calls
 
 char **split_into_args(const char *input);
 char *run_args(char **argv);
@@ -15,3 +16,4 @@ int array_length(char **arr);
 int main(void);
 char *cd(char *argv);
 char *export(char *argv);
+char *run_command(const char *cmd);

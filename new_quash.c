@@ -14,6 +14,7 @@ int main(void){
     char *input_line = NULL;
     char **argv = NULL; // array to store our space deliminated argument
     size_t buffer_size = 0;
+    char *result = NULL; // maximum byte size of result is 256
 
     printf("Welcome to Johney and Forest Quash!\n");
 
@@ -66,20 +67,25 @@ int main(void){
             free_argv(argv);
             break;
         }
+        result = malloc(256);
 
-        printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
+        result = run_args(argv);  // runs the arguments
+
+        printf("%s\n", result); // prints out the end result of the run_args function
+
+        // now to free up memory
+        for (int i = 0; argv[i] != NULL; i++) {
+            free(argv[i]);  // free up each arg
+        }
         free_argv(argv);
+        free(result);
 
     }
 
     // at this point, the quash program is ending, and we're just freeing memory
     free(input_line);
+    free(result);
     // now to free up args
-    /*
-    for (int i = 0; argv[i] != NULL; i++) {
-        free(argv[i]);  // free up each arg
-    }
-*/
     printf("Adios Amigo!\n");
     return 0;
 }
@@ -205,12 +211,31 @@ char *run_args(char **argv){  // recursive function that calls all the command
         
         else{  // if we haven't found the argument yet
             // printf("invalid argument: %s\n", argv[arg_num]);
-            output = "Invalid argument ";
-            break;
+            // it might be a linux system function, so we need to prepare it
+            output[0] = '\0'; // if we're changing it, we're starting with a new output
+            for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stopping symbol
+                if (strcmp(argv[arg_num],"|" ) == 0 || 
+                    strcmp(argv[arg_num],">" ) == 0 || 
+                    strcmp(argv[arg_num],"#") == 0 || 
+                    strcmp(argv[arg_num],">>" ) == 0){
+                    break; // if there's any strings that break the regular flow of the function
+                }
+                if (output[0] == '\0'){  // if output is empty
+                    strcpy(output, argv[arg_num]);  // just set it equal to the argument
+                }else{
+                    strncat(output, " ", strlen(" "));
+                    strncat(output, argv[arg_num], strlen(argv[arg_num])); // concatinate the two together
+                }
+            }
+            // now to call have our output put into the linux system calls
+            output = run_command(output);
+            arg_num++;
+
             // snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
         }
     }
     // now we're done running arguments
+    free(input);
     return output;
 }
 
@@ -273,29 +298,6 @@ int array_length(char **arr) {  // helper function to determine size of an array
     return count;
 }
 
-bool is_valid_function(const char *func){  // helper function to determine if a str is a valid quash function
-    const char *valid_funcs[] = {
-        "cd",
-        "pwd",
-        "echo",
-        "set",
-        "export",
-        "jobs",
-        "kill",
-        NULL // NULL terminated array
-    };
-    if (strncmp(func, "./", 2) == 0) { // if it's a ./ function, likely with a executable to run
-        return true;
-    } 
-
-    for (int i = 0; valid_funcs[i] != NULL; i++) {  // for every one of our valid functions
-        if (strcmp(func, valid_funcs[i]) == 0) { // if it's a regular quash function
-            return true;  // then we return true
-        }
-    }
-
-    return false; // But if nothings returned true yet, then we don't have any valid code
-}
 
 char *export(char *argv){  // will only take in 1 string as a argument, aka what to change the path to
 
@@ -386,3 +388,39 @@ char *cd(char *argv){  // will take in 1 string as an argument, which will just 
     }
     return "";
 }
+
+
+char* run_command(const char* cmd) {  // function that deals with running a linux command and returning it's output
+    FILE *fp;
+    char buffer[1024];
+    size_t output_size = 1; // starts with 1 just so we can get the null terminator
+    char *output = malloc(output_size);  
+    if (!output) return NULL;
+    output[0] = '\0';
+
+    fp = popen(cmd, "r");  // opens a pipe to a process and reads the output
+    if (!fp) {  // if it didin't work
+        free(output);
+        return NULL;
+    }
+
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {  // if there's still stuff in the pipe
+        size_t len = strlen(buffer);
+        char *temp = realloc(output, output_size + len);  // make sure output can store it
+        if (!temp) {  // if temp doesn't exist
+            free(output);
+            pclose(fp);
+            return NULL;
+        }
+        output = temp; // set our output = to the value we now know is valid
+        strcat(output, buffer);  // concatinate the buffer to the output 
+        output_size += len;
+    }
+
+    pclose(fp);
+    return output;
+}
+  
+
+
+

@@ -1,5 +1,9 @@
 #include "quash.h"
-
+static void free_argv(char **argv) {
+    if (!argv) return;
+    for (int i = 0; argv[i] != NULL; i++) free(argv[i]);
+    free(argv);
+}
 
 int main(void){
     /*  - input line will hold whatever text the user inputes. 
@@ -52,33 +56,65 @@ int main(void){
         //         continue; // if we've started the execution, we can go back to the beginning while it works in the background
         //     }
         // }
-        if (strcmp(argv[0], "exit") == 0 || strcmp(argv[0], "quit") == 0){  // if the first command is quit or exit, break and stop. Need to run this before the rest
-            break;
+        if (!argv || !argv[0]) {
+            free_argv(argv);
+            continue;
         }
 
-        printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
+        if (strcmp(argv[0], "exit") == 0 || strcmp(argv[0], "quit") == 0){  // if the first command is quit or exit, break and stop. Need to run this before the rest
+            free_argv(argv);
+            break;
+        }
+        char *res = run_args(argv);
+        if (res && res[0] != '\0') {
+            printf("%s\n", res);
+        }
+        free_argv(argv);
+
+        //printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
     }
 
     // at this point, the quash program is ending, and we're just freeing memory
     free(input_line);
     // now to free up args
+    /*
     for (int i = 0; argv[i] != NULL; i++) {
         free(argv[i]);  // free up each arg
     }
-
+*/
     printf("Adios Amigo!\n");
     return 0;
 }
 
 char *run_args(char **argv){  // recursive function that calls all the command
+
+    if (!argv || !argv[0]) return "";
+
+    if (strcmp(argv[0], "pwd") ==0) {
+        return pwd();
+    }
+
+    if (strcmp(argv[0], "cd") == 0) {
+        return cd(argv[1]); 
+    }
+    
+    if (strcmp(argv[0], "export" )== 0) {
+        return export(argv[1]);
+    }
+
+    static char msg[256];
+    snprintf(msg, sizeof msg, "Invalid arg \"%s\"", argv[0]);
+    return msg;
+}
+    /*
     int arg_num = 0;  // index to what argument we're on
     char *output = malloc(100);  // what is being outputed by the current function, can also be used to redirect output
     
     while (argv[arg_num] != NULL){ // while there's still argument needing to be made
 
         if (strcmp(argv[0], "pwd") == 0){
-         char *temp= pwd();  // the current output is now the pwd result
-         realloc(*output)
+         char *temp = pwd();  // the current output is now the pwd result
+         realloc(*output);
          arg_num += 1;  // now we move up the argument
         }else{  // if we haven't found the argument yet
             snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
@@ -87,22 +123,20 @@ char *run_args(char **argv){  // recursive function that calls all the command
     }
     // now we're done running arguments
     return output;
+*/
 
 
-}
 
 /* pwd command: 
 - getcwd (current working directory) will ask the OS for the current directory path
 and allocates memory for it
 */
-char *pwd(){  // this'll be the general structure. Have ea
-    char* cwd = getcwd(NULL, 0); 
-    if (cwd) { //if its sucessful, return it
-        return cwd;
-    } else {
-        return "cwd did not work, bug fix it";
+char *pwd(void){  // this'll be the general structure. Have ea
+    static char buf[4096];
+    if (getcwd(buf, sizeof buf)) {
+        return buf;
     }
-
+    return "pwd: unable to get current dir";
 }
 
 char **split_into_args(const char *input){  // turns a input string into a space delimanted char array
@@ -172,15 +206,82 @@ bool is_valid_function(const char *func){  // helper function to determine if a 
 }
 
 char *export(char *argv){  // will only take in 1 string as a argument, aka what to change the path to
+    if (argv == NULL || argv[0] == '\0'){
+        return "export: missing Name or Name = Value";
+    }
 
-    return ""; // once it's finished changing the path variable, just return an empty string
+    const char* eq = strchr(argv, '=');
+
+    if (!eq) {
+        const char *cur = getenv(argv);
+        if (!cur) {
+            if (setenv(argv, "", 1) != 0) {
+                return "Export: failed to set empty value";
+            }
+        }
+        return "";
+    }
+
+    size_t len_of_name = (size_t) (eq - argv);
+    if (len_of_name == 0) {
+        return "invalid name";
+    }
+
+    char name[256];
+    if (len_of_name >= sizeof(name)) {
+        return "export: variable name too long";
+    }
+
+    memcpy(name, argv, len_of_name);
+    name[len_of_name] = '\0';    
+
+    const char *value = eq + 1;
+    if (setenv(name, value, 1) != 0) {
+        return "export: failed to set variable";
+    }
+    return ""; //success 
 }
 
 char *cd(char *argv){  // will take in 1 string as an argument, which will just be the directory you want to change to
+    const char *target = NULL;
 
-    return ""; // returns a empty string wants it's done
+    if (argv && argv[0] == '$' && argv[1] != '\0') {
+        const char *val = getenv(argv + 1);
+        if (!val || !*val) return "cd: Target not set";
+        target = val;
+    }
 
-}
+    else if (argv == NULL || argv[0] == '\0' || strcmp(argv, "~") == 0) {
+        target = getenv("HOME");
+        if (!target || !*target) return "cd: HOME NOT SET";
+    }
+
+    else if (strcmp(argv, "-")==0){
+        target = getenv("OLDPWD");
+        if (!target || !*target) return "cd: OLDPWD not set";
+    }
+    else {
+        target = argv;
+    }
+
+    char oldpwd_buf[4096];
+    if (!getcwd(oldpwd_buf, sizeof oldpwd_buf)) {
+        oldpwd_buf[0] = '\0';
+    }
+
+    if (chdir(target) != 0) {
+        return "cd: no such file or directory";
+    }
+    if (oldpwd_buf[0] != '\0') {
+        setenv("OLDPWD", oldpwd_buf, 1);
+    }
+
+    char newpwd_buf[4096];
+    if (getcwd(newpwd_buf, sizeof newpwd_buf)) {
+        setenv("PWD", newpwd_buf, 1);
+    }
+    return "";
+ }
 
 
 char *join_args(char **argv, int start) {

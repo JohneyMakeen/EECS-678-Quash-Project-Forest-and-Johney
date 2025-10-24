@@ -148,7 +148,6 @@ int main(void){
             free_argv(argv);
             break;
         }
-        result = malloc(256);
 
         result = run_args(argv);  // runs the arguments
 
@@ -158,8 +157,8 @@ int main(void){
         for (int i = 0; argv[i] != NULL; i++) {
             free(argv[i]);  // free up each arg
         }
-        free_argv(argv);
-        free(result);
+        free(argv); // now that it's empty, we cn free it
+        // free_argv(argv);
 
     }
 
@@ -209,7 +208,7 @@ static void expand_env_token(const char *tok, char *out, size_t outcap) {
 }
 
 
-char *run_args(char **argv){  // recursive function that calls all the command
+char *run_args(char **argv){  // Loop that can take it's original output as a later input
 
     int arg_num = 0;  // index to what argument we're on
     char *output = malloc(256);  // what is being outputed by the current function, can also be used to redirect output
@@ -261,6 +260,8 @@ char *run_args(char **argv){  // recursive function that calls all the command
         // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
         if (strcmp(argv[arg_num], "|") == 0){  // piping function skeleton
             // printf("I'm in the | function! cur arg: %s, next arg: %s, cur arg num:%d\n", argv[arg_num], argv[arg_num+1], arg_num);
+            input = strdup(output); // if the output from the previous function has been defined, we'll use it
+            printf("input: %s\n", input);
             arg_num++;
             continue;
         }
@@ -274,10 +275,12 @@ char *run_args(char **argv){  // recursive function that calls all the command
             arg_num++;
             continue;
         }
+        
 
         if (strcmp(argv[arg_num], "pwd") == 0){
             char *cwd = pwd();
             output[0] = '\0';
+            input[0] = '\0'; // if we have a new command that takes no input, than the previous input is null
             if (cwd) {
                 strncat(output, cwd, 255);
                 free(cwd);
@@ -288,25 +291,71 @@ char *run_args(char **argv){  // recursive function that calls all the command
             continue;
         }
         if (strcmp(argv[arg_num], "cd") == 0) {
-            char *msg = cd(argv[arg_num + 1]);
+            arg_num += 1; // consume the cd
+            if (input[0] == '\0'){ // if we don't have outside input
+                if(strcmp(argv[arg_num],"<") == 0){ // if it's this character
+                    cd(read_file(argv[arg_num+1])); // then open the file in the next arg_num val and cd into it
+                    arg_num++;
+                    output[0] = '\0';
+                    output = "";
+                    if (argv[arg_num] != NULL) arg_num += 2;
+                    else arg_num += 1;
+                    continue;
+                }else{
+
+                    char *msg = cd(argv[arg_num]);
+                    output[0] = '\0';
+                    // if (msg && msg[0] != '\0') {
+                    //     strncat(output, msg, 255 - strlen(output));
+                    // }
+                    output = "";
+                    if (argv[arg_num] != NULL) arg_num += 2;
+                    else arg_num += 1;
+                    continue;
+                }
+        }else{  // if we're using outside input, aka from a pipe
+            char *msg = cd(input); // cd into that instead
             output[0] = '\0';
-            if (msg && msg[0] != '\0') {
-                strncat(output, msg, 255 - strlen(output));
-            }
-            if (argv[arg_num + 1] != NULL) arg_num += 2;
-            else arg_num += 1;
+            // if (msg && msg[0] != '\0') {
+            //     printf("%s",msg);
+            //     strncat(output, msg, 255 - strlen(output));
+            // }
+            output = "";
+            input[0] = '\0';
+
             continue;
+        }
         }
 
         if (strcmp(argv[arg_num], "export") == 0) {
-            char *msg = export(argv[arg_num + 1]);
-            output[0] = '\0';
-            if (msg && msg[0] != '\0') {
-                strncat(output, msg, 255 - strlen(output));
+            arg_num++; // consume the export
+            if (input[0] == '\0'){ // if we don't have outside input
+                if(strcmp(argv[arg_num],"<") == 0){
+                    char *msg = export(read_file(argv[arg_num + 1]));
+                    output[0] = '\0';
+                    if (msg && msg[0] != '\0') {
+                        strncat(output, msg, 255 - strlen(output));
+                    }
+                    if (argv[arg_num + 2] != NULL) arg_num += 2;
+                }else{
+
+                char *msg = export(argv[arg_num]);
+                output[0] = '\0';
+                if (msg && msg[0] != '\0') {
+                    strncat(output, msg, 255 - strlen(output));
+                }
+                arg_num += 1;
+                continue;
             }
-            if (argv[arg_num + 1] != NULL) arg_num += 2;
-            else arg_num += 1;
-            continue;
+            }else {  // if we have pipe input
+                char *msg = export(input);
+                output[0] = '\0';
+                if (msg && msg[0] != '\0') {
+                    strncat(output, msg, 255 - strlen(output));
+                }
+                input[0] = '\0';
+
+            }
         }
 
         if (strcmp(argv[arg_num], "jobs") == 0) {
@@ -336,49 +385,87 @@ char *run_args(char **argv){  // recursive function that calls all the command
             arg_num++; // make is so we're looking at the arguments
             output[0] = '\0';
             char piece[512]; // if we're echoing, we're starting with a new output
-            for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stop
-                if (strcmp(argv[arg_num],"|" ) == 0 || 
-                    strcmp(argv[arg_num],">" ) == 0 || 
-                    strcmp(argv[arg_num],"#") == 0 || 
-                    strcmp(argv[arg_num],">>" ) == 0){
-                    break; // if there's any strings that break the regular flow of echo
-                }
-                expand_env_token(argv[arg_num], piece, sizeof(piece));
-                if (output[0] != '\0'){  // if output is empty
-                    strncat(output, " ", 255 - strlen(output));
-                  }  // just set it equal to the argument
+            if (input[0] == '\0'){ // if we're not using outside input
+                if(strcmp(argv[arg_num],"<") == 0){  // if we're needing to take a file as input
+                    arg_num++; // no longer looking at "<"
+                    expand_env_token(read_file(argv[arg_num]), piece, sizeof(piece));
+                    if (output[0] != '\0'){
+                        strncat(output, " ", 255 - strlen(output));
+                    }
+                    strncat(output, piece, 255 - strlen(output));
+                    arg_num++; // just to make up for the lack of loop
+                    // printf("from echo: %s\n", output);
+                    continue;
 
-                strncat(output, piece, 255 - strlen(output)); // concatinate the two together
+                }else{
+                for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stop
+                    if (strcmp(argv[arg_num],"|" ) == 0 || 
+                        strcmp(argv[arg_num],">" ) == 0 || 
+                        strcmp(argv[arg_num],"#") == 0 || 
+                        strcmp(argv[arg_num],">>" ) == 0){
+                        break; // if there's any strings that break the regular flow of echo
+                        }
+                    expand_env_token(argv[arg_num], piece, sizeof(piece));
+                    if (output[0] != '\0'){
+                        strncat(output, " ", 255 - strlen(output));
+                    }
+                    strncat(output, piece, 255 - strlen(output));
+                }
+                // printf("from echo: %s\n", output);
+                continue;
             }
-            continue;
+            }
+            else{  // if we have outside input
+                    expand_env_token(input, piece, sizeof(piece));
+                    if (output[0] != '\0'){
+                        strncat(output, " ", 255 - strlen(output));
+                    }
+                    strncat(output, piece, 255 - strlen(output));
+                    input[0] = '\0';
+                    continue;
+                }
         }
 
         
-        else{  // if we haven't found the argument yet
+        else{  // if we haven't found the argument yet, we're going to assume it's a linux command
             // printf("invalid argument: %s\n", argv[arg_num]);
             // it might be a linux system function, so we need to prepare it
             output[0] = '\0'; // if we're changing it, we're starting with a new output
-            for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stopping symbol
-                if (strcmp(argv[arg_num],"|" ) == 0 || 
-                    strcmp(argv[arg_num],">" ) == 0 || 
-                    strcmp(argv[arg_num],"#") == 0 || 
-                    strcmp(argv[arg_num],">>" ) == 0){
-                    break; // if there's any strings that break the regular flow of the function
+            if (input[0]=='\0'){
+                for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stopping symbol
+                    if (strcmp(argv[arg_num],"|" ) == 0 || 
+                        strcmp(argv[arg_num],">" ) == 0 || 
+                        strcmp(argv[arg_num],"#") == 0 || 
+                        strcmp(argv[arg_num],">>" ) == 0){
+                        arg_num--; // just to ensure we don't go past this later
+                        break; // if there's any strings that break the regular flow of the function
+                    }
+                    if (output[0] == '\0'){  // if output is empty
+                        strcpy(output, argv[arg_num]);  // just set it equal to the argument
+                    }else{
+                        strncat(output, " ", strlen(" "));
+                        strncat(output, argv[arg_num], strlen(argv[arg_num])); // concatinate the two together
+                    }
                 }
-                if (output[0] == '\0'){  // if output is empty
-                    strcpy(output, argv[arg_num]);  // just set it equal to the argument
-                }else{
-                    strncat(output, " ", strlen(" "));
-                    strncat(output, argv[arg_num], strlen(argv[arg_num])); // concatinate the two together
+                arg_num++;
+                output = run_command(output);
+            }else{  // if we have outside input
+                if (output[0] == '\0'){
+                    strcpy(output, argv[arg_num]); // make it so the output has the linux command
                 }
-            }
+                strncat(output, " ", 1);
+                strncat(output, input, strlen(input));
+                output = run_command(output);
+                input[0] = '\0'; // now we need to clear the input
+                arg_num++;
+                }
+            
             // now to call have our output put into the linux system calls
-            output = run_command(output);
-            arg_num++;
+        }
 
             // snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
-        }
     }
+
     // now we're done running arguments
     free(input);
     return output;
@@ -565,6 +652,48 @@ char* run_command(const char* cmd) {  // function that deals with running a linu
 
     pclose(fp);
     return output;
+}
+
+char* read_file(const char* filename) { // takes in a file name, exports out a string of the file
+    FILE *file = fopen(filename, "r");
+    if (!file) { // if the file doesn't open
+        perror("Failed to open file");
+        return "";
+    }
+    char *buffer = malloc(255); // how many bytes we're storing
+    if (!buffer) {
+        perror("malloc failed");
+        fclose(file);
+        return "";
+    }
+
+    // max of 256 bytes
+    size_t read_size = fread(buffer, 1, 256, file);
+    buffer[read_size] = '\0';  // null terminated
+
+    fclose(file);
+    return buffer;
+}
+
+
+char *write_file(const char* filename, const char* content) {
+    FILE *file = fopen(filename, "w");  // begin writting to file
+    if (!file) {
+        perror("Failed to open file");
+        return ""; 
+    }
+
+    // how many bytes we need to write up to
+    size_t len = strnlen(content, 256);
+    size_t written = fwrite(content, 1, len, file);
+    if (written != len) {
+        perror("fwrite failed");
+        fclose(file);
+        return "";
+    }
+
+    fclose(file);  // close the file
+    return "";  // if everything goes well
 }
   
 

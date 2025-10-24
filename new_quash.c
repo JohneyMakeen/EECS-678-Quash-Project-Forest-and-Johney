@@ -13,6 +13,7 @@ int main(void){
     char *input_line = NULL;
     char **argv = NULL; // array to store our space deliminated argument
     size_t buffer_size = 0;
+    char *result = NULL; // maximum byte size of result is 256
 
     printf("Welcome to Johney and Forest Quash!\n");
 
@@ -65,20 +66,25 @@ int main(void){
             free_argv(argv);
             break;
         }
+        result = malloc(256);
 
-        printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
+        result = run_args(argv);  // runs the arguments
+
+        printf("%s\n", result); // prints out the end result of the run_args function
+
+        // now to free up memory
+        for (int i = 0; argv[i] != NULL; i++) {
+            free(argv[i]);  // free up each arg
+        }
         free_argv(argv);
+        free(result);
 
     }
 
     // at this point, the quash program is ending, and we're just freeing memory
     free(input_line);
+    free(result);
     // now to free up args
-    /*
-    for (int i = 0; argv[i] != NULL; i++) {
-        free(argv[i]);  // free up each arg
-    }
-*/
     printf("Adios Amigo!\n");
     return 0;
 }
@@ -86,9 +92,9 @@ int main(void){
 char *run_args(char **argv){  // recursive function that calls all the command
 
     int arg_num = 0;  // index to what argument we're on
-    char *output = malloc(2100);  // what is being outputed by the current function, can also be used to redirect output
+    char *output = malloc(512);  // what is being outputed by the current function, can also be used to redirect output
     output[0] = '\0';
-    char *input = malloc(10000); // just a string to store the redirected output
+    char *input = malloc(512); // just a string to store the redirected output
     
     while (argv[arg_num] != NULL && (strcmp(argv[arg_num],"#" ) != 0)){ // while there's still an argument needing to be executed
         // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
@@ -160,6 +166,7 @@ char *run_args(char **argv){  // recursive function that calls all the command
         }
     }
     // now we're done running arguments
+    free(input);
     return output;
 }
 
@@ -305,7 +312,7 @@ char *cd(char *argv){  // will take in 1 string as an argument, which will just 
 char* run_command(const char* cmd) {  // function that deals with running a linux command and returning it's output
     FILE *fp;
     char buffer[1024];
-    size_t output_size = 1; // start with 1 for the null terminator
+    size_t output_size = 1; // starts with 1 just so we can get the null terminator
     char *output = malloc(output_size);  
     if (!output) return NULL;
     output[0] = '\0';
@@ -325,7 +332,7 @@ char* run_command(const char* cmd) {  // function that deals with running a linu
             return NULL;
         }
         output = temp; // set our output = to the value we now know is valid
-        strcat(output, buffer);
+        strcat(output, buffer);  // concatinate the buffer to the output 
         output_size += len;
     }
 

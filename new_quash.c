@@ -153,6 +153,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             arg_num++;
             continue;
         }
+        
 
         if (strcmp(argv[arg_num], "pwd") == 0){
             char *cwd = pwd();
@@ -170,15 +171,26 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
         if (strcmp(argv[arg_num], "cd") == 0) {
             arg_num += 1; // consume the cd
             if (input[0] == '\0'){ // if we don't have outside input
-            char *msg = cd(argv[arg_num]);
-            output[0] = '\0';
-            // if (msg && msg[0] != '\0') {
-            //     strncat(output, msg, 255 - strlen(output));
-            // }
-            output = "";
-            if (argv[arg_num] != NULL) arg_num += 2;
-            else arg_num += 1;
-            continue;
+                if(strcmp(argv[arg_num],"<") == 0){ // if it's this character
+                    cd(read_file(argv[arg_num+1])); // then open the file in the next arg_num val and cd into it
+                    arg_num++;
+                    output[0] = '\0';
+                    output = "";
+                    if (argv[arg_num] != NULL) arg_num += 2;
+                    else arg_num += 1;
+                    continue;
+                }else{
+
+                    char *msg = cd(argv[arg_num]);
+                    output[0] = '\0';
+                    // if (msg && msg[0] != '\0') {
+                    //     strncat(output, msg, 255 - strlen(output));
+                    // }
+                    output = "";
+                    if (argv[arg_num] != NULL) arg_num += 2;
+                    else arg_num += 1;
+                    continue;
+                }
         }else{  // if we're using outside input, aka from a pipe
             char *msg = cd(input); // cd into that instead
             output[0] = '\0';
@@ -194,17 +206,26 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
         }
 
         if (strcmp(argv[arg_num], "export") == 0) {
+            arg_num++; // consume the export
             if (input[0] == '\0'){ // if we don't have outside input
-                char *msg = export(argv[arg_num + 1]);
+                if(strcmp(argv[arg_num],"<") == 0){
+                    char *msg = export(read_file(argv[arg_num + 1]));
+                    output[0] = '\0';
+                    if (msg && msg[0] != '\0') {
+                        strncat(output, msg, 255 - strlen(output));
+                    }
+                    if (argv[arg_num + 2] != NULL) arg_num += 2;
+                }else{
+
+                char *msg = export(argv[arg_num]);
                 output[0] = '\0';
                 if (msg && msg[0] != '\0') {
                     strncat(output, msg, 255 - strlen(output));
                 }
-                if (argv[arg_num + 1] != NULL) arg_num += 2;
-                else arg_num += 1;
-            continue;
+                arg_num += 1;
+                continue;
+            }
             }else {  // if we have pipe input
-                arg_num += 1; // no longer on export
                 char *msg = export(input);
                 output[0] = '\0';
                 if (msg && msg[0] != '\0') {
@@ -472,6 +493,48 @@ char* run_command(const char* cmd) {  // function that deals with running a linu
 
     pclose(fp);
     return output;
+}
+
+char* read_file(const char* filename) { // takes in a file name, exports out a string of the file
+    FILE *file = fopen(filename, "r");
+    if (!file) { // if the file doesn't open
+        perror("Failed to open file");
+        return "";
+    }
+    char *buffer = malloc(255); // how many bytes we're storing
+    if (!buffer) {
+        perror("malloc failed");
+        fclose(file);
+        return "";
+    }
+
+    // max of 256 bytes
+    size_t read_size = fread(buffer, 1, 256, file);
+    buffer[read_size] = '\0';  // null terminated
+
+    fclose(file);
+    return buffer;
+}
+
+
+char *write_file(const char* filename, const char* content) {
+    FILE *file = fopen(filename, "w");  // begin writting to file
+    if (!file) {
+        perror("Failed to open file");
+        return ""; 
+    }
+
+    // how many bytes we need to write up to
+    size_t len = strnlen(content, 256);
+    size_t written = fwrite(content, 1, len, file);
+    if (written != len) {
+        perror("fwrite failed");
+        fclose(file);
+        return "";
+    }
+
+    fclose(file);  // close the file
+    return "";  // if everything goes well
 }
   
 

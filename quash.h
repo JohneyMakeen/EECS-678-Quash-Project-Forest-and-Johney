@@ -17,3 +17,5 @@ int main(void);
 char *cd(char *argv);
 char *export(char *argv);
 char *run_command(const char *cmd);
+char* read_file(const char* filename);
+char *write_file(const char* filename, const char* content);

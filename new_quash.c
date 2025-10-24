@@ -65,13 +65,10 @@ int main(void){
             free_argv(argv);
             break;
         }
-        char *res = run_args(argv);
-        if (res && res[0] != '\0') {
-            printf("%s\n", res);
-        }
+
+        printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
         free_argv(argv);
 
-        //printf("%s\n", run_args(argv)); // prints out the end result of the run_args function
     }
 
     // at this point, the quash program is ending, and we're just freeing memory
@@ -88,32 +85,13 @@ int main(void){
 
 char *run_args(char **argv){  // recursive function that calls all the command
 
-    if (!argv || !argv[0]) return "";
-
-    if (strcmp(argv[0], "pwd") ==0) {
-        return pwd();
-    }
-
-    if (strcmp(argv[0], "cd") == 0) {
-        return cd(argv[1]); 
-    }
-    
-    if (strcmp(argv[0], "export" )== 0) {
-        return export(argv[1]);
-    }
-
-    static char msg[256];
-    snprintf(msg, sizeof msg, "Invalid arg \"%s\"", argv[0]);
-    return msg;
-}
-    /*
     int arg_num = 0;  // index to what argument we're on
     char *output = malloc(256);  // what is being outputed by the current function, can also be used to redirect output
     output[0] = '\0';
     char *input = malloc(256); // just a string to store the redirected output
     
     while (argv[arg_num] != NULL && (strcmp(argv[arg_num],"#" ) != 0)){ // while there's still an argument needing to be executed
-        // printf("curr string: %s\n", argv[arg_num]);
+        // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
         if (strcmp(argv[arg_num], "|") == 0){  // piping function skeleton
             // printf("I'm in the | function! cur arg: %s, next arg: %s, cur arg num:%d\n", argv[arg_num], argv[arg_num+1], arg_num);
             arg_num++;
@@ -160,21 +138,14 @@ char *run_args(char **argv){  // recursive function that calls all the command
         else{  // if we haven't found the argument yet
             // printf("invalid argument: %s\n", argv[arg_num]);
             output = "Invalid argument ";
+            break;
             // snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
-    while (argv[arg_num] != NULL){ // while there's still argument needing to be made
-
-        if (strcmp(argv[0], "pwd") == 0){
-         char *temp = pwd();  // the current output is now the pwd result
-         realloc(*output);
-         arg_num += 1;  // now we move up the argument
-        }else{  // if we haven't found the argument yet
-            snprintf(output, sizeof(output), "Invalid argument \"%s\"",argv[arg_num]);  // we make the output this string
-            break; // then stop running the args
         }
     }
     // now we're done running arguments
     return output;
-*/
+}
+
 
 
 
@@ -333,6 +304,8 @@ char *cd(char *argv){  // will take in 1 string as an argument, which will just 
     if (getcwd(newpwd_buf, sizeof newpwd_buf)) {
         setenv("PWD", newpwd_buf, 1);
     }
-    return ""; }
+    return "";
+}
+
 
 

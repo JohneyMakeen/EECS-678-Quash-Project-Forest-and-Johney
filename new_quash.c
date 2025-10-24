@@ -67,7 +67,6 @@ int main(void){
             free_argv(argv);
             break;
         }
-        result = malloc(256);
 
         result = run_args(argv);  // runs the arguments
 
@@ -77,8 +76,8 @@ int main(void){
         for (int i = 0; argv[i] != NULL; i++) {
             free(argv[i]);  // free up each arg
         }
+        free(argv); // now that it's empty, we cn free it
         // free_argv(argv);
-        // free(result);
 
     }
 

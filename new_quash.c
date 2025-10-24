@@ -5,6 +5,80 @@ static void free_argv(char **argv) {
     for (int i = 0; argv[i] != NULL; i++) free(argv[i]);
     free(argv);
 }
+typedef struct {
+    int   id;
+    pid_t pid;
+    char *cmdline;
+    bool active;
+} Job;
+#define MAX_JOBS 128
+static Job jobs[MAX_JOBS];
+static int next_jobid = 1;
+static volatile sig_atomic_t count_of_dead_children = 0;
+
+static int jobs_add(pid_t pid, const char *cmdline) {
+    for (int i = 0; i < MAX_JOBS; i++) {
+        if (!jobs[i].active) {
+            jobs[i].active = true;
+            jobs[i].pid = pid;
+            jobs[i].id = next_jobid++;
+            jobs[i].cmdline = strdup(cmdline ? cmdline : "");
+            return jobs[i].id;
+        }
+    }
+    return -1;
+}
+
+static Job* jobs_find_by_pid(pid_t pid) {
+    for (int i = 0; i < MAX_JOBS; i++) 
+        if (jobs[i].active && jobs[i].pid == pid) return &jobs[i];
+    return NULL;
+}
+
+static void jobs_mark_done(pid_t pid) {
+    Job *j = jobs_find_by_pid(pid);
+    if (j) {
+        printf("Completed: [%d] %d %s\n", j->id, j->pid, j->cmdline);
+        fflush(stdout);
+        j->active = false;
+        free(j->cmdline);
+        j->cmdline = NULL;
+    }
+}
+
+static void jobs_list(void) {
+    for (int i = 0; i <MAX_JOBS; i++) {
+        if (jobs[i].active) {
+            printf("[%d] %d %s &\n", jobs[i].id, jobs[i].pid, jobs[i].cmdline);
+        }
+    }
+    fflush(stdout);
+}
+
+static void sigchld_handler(int sig) {
+    (void)sig;
+    int status;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        jobs_mark_done(pid);
+    }
+}
+
+static void join_argv(char *const *argv, char *out, size_t outcap) {
+    out[0] = '\0';
+    for (int i = 0; argv[i]; i++) {
+        if (i && strlen(out) + 1 < outcap)
+            strncat(out, " ", outcap - 1 - strlen(out));
+        strncat(out, argv[i], outcap - 1 - strlen(out));
+    }
+}
+
+static bool is_builtin(const char *s) {
+    return s && 
+    (!strcmp(s, "echo") || !strcmp(s, "pwd") || !strcmp(s, "cd") || 
+    !strcmp(s, "export") || !strcmp(s, "jobs") || !strcmp(s, "kill") ||
+    !strcmp(s, "exit") || !strcmp(s, "quit"));
+}
 
 int main(void){
     /*  - input line will hold whatever text the user inputes. 
@@ -17,6 +91,13 @@ int main(void){
     char *result = NULL; // maximum byte size of result is 256
 
     printf("Welcome to Johney and Forest Quash!\n");
+
+    struct sigaction sa = {0};
+    sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &sa, NULL);
+
 
     while(1){ // infinite loop until it recieves the exit command
         printf("[QUASH]$ ");
@@ -134,6 +215,47 @@ char *run_args(char **argv){  // recursive function that calls all the command
     char *output = malloc(256);  // what is being outputed by the current function, can also be used to redirect output
     output[0] = '\0';
     char *input = malloc(256); // just a string to store the redirected output
+
+    int argc = array_length(argv);
+    bool run_in_background = false;
+    if (argc > 0 && strcmp(argv[argc-1], "&")== 0) {
+        run_in_background = true;
+        free(argv[argc-1]);
+        argv[argc-1] = NULL;
+        argc--;
+    }
+
+    if (run_in_background && !is_builtin(argv[0])) {
+        char *argv2[128];
+        int k = 0;
+        for (int i = 0; argv[i]; i++) {
+            if (!strcmp(argv[i], "|") || !strcmp(argv[i], "<") || !strcmp(argv[i], ">") || 
+                !strcmp(argv[i], ">>") || !strcmp(argv[i], "#")) break;
+
+            argv2[k++] = argv[i];
+    }
+
+    argv2[k] = NULL;
+    
+    char cmdline[512];
+    join_argv(argv2, cmdline, sizeof(cmdline));
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork");
+    } else if (pid == 0) {
+        execvp(argv2[0], argv2);
+        perror("execvp");
+        _exit(127);
+    } else {
+        int jid = jobs_add(pid, cmdline);
+        printf("Background job started: [%d] %d %s &\n", jid, pid, cmdline);
+        fflush(stdout);
+    }
+    free(input);
+    output[0] = '\0';
+    return output;
+}
     
     while (argv[arg_num] != NULL && (strcmp(argv[arg_num],"#" ) != 0)){ // while there's still an argument needing to be executed
         // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
@@ -184,6 +306,29 @@ char *run_args(char **argv){  // recursive function that calls all the command
             }
             if (argv[arg_num + 1] != NULL) arg_num += 2;
             else arg_num += 1;
+            continue;
+        }
+
+        if (strcmp(argv[arg_num], "jobs") == 0) {
+            jobs_list();
+            output[0] = '\0';
+            arg_num++;
+            continue;
+        }
+
+        if (strcmp(argv[arg_num], "kill") == 0) {
+            char *sign_s = argv[arg_num+1];
+            char *pid_s = argv[arg_num+2];
+            if (!sign_s || !pid_s) {
+                fprintf(stderr, "kill: usage: kill SIGNUM PID \n");
+                arg_num += 1;
+            } else {
+                int sign = atoi(sign_s);
+                pid_t pid = (pid_t) strtol(pid_s, NULL, 10);
+                if (kill(pid, sign) != 0) perror("kill");
+                arg_num += 3;
+            }
+            output[0] = '\0';
             continue;
         }
 
@@ -238,6 +383,7 @@ char *run_args(char **argv){  // recursive function that calls all the command
     free(input);
     return output;
 }
+
 
 
 

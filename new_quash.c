@@ -77,8 +77,8 @@ int main(void){
         for (int i = 0; argv[i] != NULL; i++) {
             free(argv[i]);  // free up each arg
         }
-        free_argv(argv);
-        free(result);
+        // free_argv(argv);
+        // free(result);
 
     }
 
@@ -128,7 +128,7 @@ static void expand_env_token(const char *tok, char *out, size_t outcap) {
 }
 
 
-char *run_args(char **argv){  // recursive function that calls all the command
+char *run_args(char **argv){  // Loop that can take it's original output as a later input
 
     int arg_num = 0;  // index to what argument we're on
     char *output = malloc(256);  // what is being outputed by the current function, can also be used to redirect output
@@ -139,6 +139,7 @@ char *run_args(char **argv){  // recursive function that calls all the command
         // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
         if (strcmp(argv[arg_num], "|") == 0){  // piping function skeleton
             // printf("I'm in the | function! cur arg: %s, next arg: %s, cur arg num:%d\n", argv[arg_num], argv[arg_num+1], arg_num);
+            input = output; // if the output from the previous function has been defined, we'll use it
             arg_num++;
             continue;
         }
@@ -156,6 +157,7 @@ char *run_args(char **argv){  // recursive function that calls all the command
         if (strcmp(argv[arg_num], "pwd") == 0){
             char *cwd = pwd();
             output[0] = '\0';
+            input[0] = '\0'; // if we have a new command that takes no input, than the previous input is null
             if (cwd) {
                 strncat(output, cwd, 255);
                 free(cwd);
@@ -166,47 +168,84 @@ char *run_args(char **argv){  // recursive function that calls all the command
             continue;
         }
         if (strcmp(argv[arg_num], "cd") == 0) {
-            char *msg = cd(argv[arg_num + 1]);
+            arg_num += 1; // consume the cd
+            if (input[0] == '\0'){ // if we don't have outside input
+            char *msg = cd(argv[arg_num]);
             output[0] = '\0';
-            if (msg && msg[0] != '\0') {
-                strncat(output, msg, 255 - strlen(output));
-            }
-            if (argv[arg_num + 1] != NULL) arg_num += 2;
+            // if (msg && msg[0] != '\0') {
+            //     strncat(output, msg, 255 - strlen(output));
+            // }
+            output = "";
+            if (argv[arg_num] != NULL) arg_num += 2;
             else arg_num += 1;
             continue;
+        }else{  // if we're using outside input, aka from a pipe
+            char *msg = cd(input); // cd into that instead
+            output[0] = '\0';
+            // if (msg && msg[0] != '\0') {
+            //     printf("%s",msg);
+            //     strncat(output, msg, 255 - strlen(output));
+            // }
+            output = "";
+
+            continue;
+        }
         }
 
         if (strcmp(argv[arg_num], "export") == 0) {
-            char *msg = export(argv[arg_num + 1]);
-            output[0] = '\0';
-            if (msg && msg[0] != '\0') {
-                strncat(output, msg, 255 - strlen(output));
-            }
-            if (argv[arg_num + 1] != NULL) arg_num += 2;
-            else arg_num += 1;
+            if (input[0] == '\0'){ // if we don't have outside input
+                char *msg = export(argv[arg_num + 1]);
+                output[0] = '\0';
+                if (msg && msg[0] != '\0') {
+                    strncat(output, msg, 255 - strlen(output));
+                }
+                if (argv[arg_num + 1] != NULL) arg_num += 2;
+                else arg_num += 1;
             continue;
+            }else {  // if we have pipe input
+                arg_num += 1; // no longer on export
+                char *msg = export(input);
+                output[0] = '\0';
+                if (msg && msg[0] != '\0') {
+                    strncat(output, msg, 255 - strlen(output));
+                }
+
+            }
         }
 
         if (strcmp(argv[arg_num], "echo") == 0){
             arg_num++; // make is so we're looking at the arguments
             output[0] = '\0';
             char piece[512]; // if we're echoing, we're starting with a new output
-            for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stop
-                if (strcmp(argv[arg_num],"|" ) == 0 || 
-                    strcmp(argv[arg_num],">" ) == 0 || 
-                    strcmp(argv[arg_num],"#") == 0 || 
-                    strcmp(argv[arg_num],">>" ) == 0){
-                    break; // if there's any strings that break the regular flow of echo
+            if (input[0] == '\0'){
+                for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stop
+                    if (strcmp(argv[arg_num],"|" ) == 0 || 
+                        strcmp(argv[arg_num],">" ) == 0 || 
+                        strcmp(argv[arg_num],"#") == 0 || 
+                        strcmp(argv[arg_num],">>" ) == 0){
+                        break; // if there's any strings that break the regular flow of echo
+                        }
+                    expand_env_token(argv[arg_num], piece, sizeof(piece));
                 }
-                expand_env_token(argv[arg_num], piece, sizeof(piece));
-                if (output[0] != '\0'){  // if output is empty
-                    strncat(output, " ", 255 - strlen(output));
-                  }  // just set it equal to the argument
-
-                strncat(output, piece, 255 - strlen(output)); // concatinate the two together
             }
+            else{  // if we have outside input
+                for (int i = 0;input[i] !=  '\0'; i++){ // while there isn't a stop, and arguments wont move forward, just the input 
+                    if (strcmp(argv[arg_num],"|" ) == 0 || 
+                        strcmp(argv[arg_num],">" ) == 0 || 
+                        strcmp(argv[arg_num],"#") == 0 || 
+                        strcmp(argv[arg_num],">>" ) == 0){
+                        break; // if there's any strings that break the regular flow of echo
+                        }
+                    expand_env_token(input, piece, sizeof(piece));
+                }
+            }
+            if (output[0] != '\0'){  // if output is empty
+                strncat(output, " ", 255 - strlen(output));
+            }  // just set it equal to the argument
+            strncat(output, piece, 255 - strlen(output)); // concatinate the two together
             continue;
         }
+
 
         
         else{  // if we haven't found the argument yet

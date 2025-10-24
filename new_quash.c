@@ -256,7 +256,7 @@ char *run_args(char **argv){  // recursive function that calls all the command
     output[0] = '\0';
     return output;
 }
-    
+
     while (argv[arg_num] != NULL && (strcmp(argv[arg_num],"#" ) != 0)){ // while there's still an argument needing to be executed
         // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
         if (strcmp(argv[arg_num], "|") == 0){  // piping function skeleton

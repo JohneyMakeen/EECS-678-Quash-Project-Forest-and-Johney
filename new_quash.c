@@ -139,7 +139,8 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
         // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
         if (strcmp(argv[arg_num], "|") == 0){  // piping function skeleton
             // printf("I'm in the | function! cur arg: %s, next arg: %s, cur arg num:%d\n", argv[arg_num], argv[arg_num+1], arg_num);
-            input = output; // if the output from the previous function has been defined, we'll use it
+            input = strdup(output); // if the output from the previous function has been defined, we'll use it
+            printf("input: %s\n", input);
             arg_num++;
             continue;
         }
@@ -226,26 +227,22 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
                         break; // if there's any strings that break the regular flow of echo
                         }
                     expand_env_token(argv[arg_num], piece, sizeof(piece));
+                    if (output[0] != '\0'){
+                        strncat(output, " ", 255 - strlen(output));
+                    }
+                    strncat(output, piece, 255 - strlen(output));
                 }
+                continue;
             }
             else{  // if we have outside input
-                for (int i = 0;input[i] !=  '\0'; i++){ // while there isn't a stop, and arguments wont move forward, just the input 
-                    if (strcmp(argv[arg_num],"|" ) == 0 || 
-                        strcmp(argv[arg_num],">" ) == 0 || 
-                        strcmp(argv[arg_num],"#") == 0 || 
-                        strcmp(argv[arg_num],">>" ) == 0){
-                        break; // if there's any strings that break the regular flow of echo
-                        }
                     expand_env_token(input, piece, sizeof(piece));
+                    if (output[0] != '\0'){
+                        strncat(output, " ", 255 - strlen(output));
+                    }
+                    strncat(output, piece, 255 - strlen(output));
+                    continue;
                 }
-            }
-            if (output[0] != '\0'){  // if output is empty
-                strncat(output, " ", 255 - strlen(output));
-            }  // just set it equal to the argument
-            strncat(output, piece, 255 - strlen(output)); // concatinate the two together
-            continue;
         }
-
 
         
         else{  // if we haven't found the argument yet

@@ -191,44 +191,50 @@ int main(void){
     printf("Adios Amigo!\n");
     return 0;
 }
+/* Helps with comamnds like export PATH=$HOME. Main idea is that it expands a single token for those like $HOME.
+If it starts with $, copy the env value and keep any of the after things (i.e. $HOME/bin).
+Otherwise, copy the token unchanged. 
+*/
+static void expand_env_token(const char *tok, char *out, size_t outcap) { 
+    if (!tok || !out || outcap == 0) return; //if it is an invalid output buffer
+    out[0] = '\0'; //starts with empty output
 
-static void expand_env_token(const char *tok, char *out, size_t outcap) {
-    if (!tok || !out || outcap == 0) return;
-    out[0] = '\0';
+    if (tok[0] != '$') { 
+        strncat(out, tok, outcap - 1); //copy 
+        return;
+    }
 
-    if (tok[0] != '$') {
+    const char *p = tok + 1; //begins scanning the variable name after '$'
+    while (*p && (isalnum((unsigned char)*p) || *p == '_')) {// POSIX variable chars. isalnum will help with checking if the characther is either a letter or decimal digit
+        p++; //continue with the name while it is still valid
+    }
+
+    size_t len_of_name = (size_t)(p- (tok + 1));// calculate how many charcathers we saw throuhout the length of the name
+
+    if (len_of_name == 0) { //edge case
         strncat(out, tok, outcap - 1);
         return;
     }
 
-    const char *p = tok + 1;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
-        p++;
+    char name[256]; //temp buffer for the variable name 
+    if (len_of_name >= sizeof(name)) { //if the name is too long
+        strncat(out, tok, outcap - 1); //go back to the previous token then
+        return; //avoid overflows
     }
 
-    size_t len_of_name = (size_t)(p- (tok + 1));
+    memcpy(name, tok + 1, len_of_name); //copy just the name portion info stack buffer 
+    name[len_of_name] = '\0'; //making sure it is a proper C string
 
-    if (len_of_name == 0) {
-        strncat(out, tok, outcap - 1);
-        return;
-    }
-
-    char name[256];
-    if (len_of_name >= sizeof(name)) {
-        strncat(out, tok, outcap - 1);
-        return;
-    }
-
-    memcpy(name, tok + 1, len_of_name);
-    name[len_of_name] = '\0';
-
-    const char *val = getenv(name);
+    const char *val = getenv(name); //reading the enviorment variable 
     if (!val) val = ""; // unset means empty
 
-    strncat(out, val, outcap - 1 - strlen(out));
-    strncat(out, p, outcap - 1 - strlen(out));
+    strncat(out, val, outcap - 1 - strlen(out)); //First, place the enviorment value
+    strncat(out, p, outcap - 1 - strlen(out)); //then append any suffix after the name 
 }
 
+/* reading tokens from left to right. supporting background programs with '&
+piping string handoff, builtins (pwd,cd, exprt, jobs, kill, echo). returns the final stages output text
+*/
 
 char *run_args(char **argv){  // Loop that can take it's original output as a later input
 
@@ -237,18 +243,18 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
     output[0] = '\0';
     char *input = malloc(256); // just a string to store the redirected output
 
-    int argc = array_length(argv);
-    bool run_in_background = false;
-    if (argc > 0 && strcmp(argv[argc-1], "&")== 0) {
-        run_in_background = true;
-        free(argv[argc-1]);
-        argv[argc-1] = NULL;
-        argc--;
+    int argc = array_length(argv); //count tokens
+    bool run_in_background = false; //track if user asked for async exec
+    if (argc > 0 && strcmp(argv[argc-1], "&")== 0) { //if last token is &, its a background request
+        run_in_background = true; //flip to async behaviour. 
+        free(argv[argc-1]); //& was recently heap duplicated, to avoid copies we need to free it
+        argv[argc-1] = NULL; //helps with later code
+        argc--; 
     }
 
-    if (run_in_background && !is_builtin(argv[0])) {
-        char *argv2[128];
-        int k = 0;
+    if (run_in_background && !is_builtin(argv[0])) { //only external commands get backgrounded here
+        char *argv2[128]; //local scratch argv unti; the first control symbol
+        int k = 0; //keeps count 
         for (int i = 0; argv[i]; i++) {
             if (!strcmp(argv[i], "|") || !strcmp(argv[i], "<") || !strcmp(argv[i], ">") || 
                 !strcmp(argv[i], ">>") || !strcmp(argv[i], "#")) break;

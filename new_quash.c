@@ -133,9 +133,11 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
     char *output = malloc(256);  // what is being outputed by the current function, can also be used to redirect output
     output[0] = '\0';
     char *input = malloc(256); // just a string to store the redirected output
+    input[0] = '\0';
     
     while (argv[arg_num] != NULL && (strcmp(argv[arg_num],"#" ) != 0)){ // while there's still an argument needing to be executed
         // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
+        printf("arg num: %d, %s\n", arg_num, argv[arg_num]);
         if (strcmp(argv[arg_num], "|") == 0){  // piping function skeleton
             // printf("I'm in the | function! cur arg: %s, next arg: %s, cur arg num:%d\n", argv[arg_num], argv[arg_num+1], arg_num);
             input = strdup(output); // if the output from the previous function has been defined, we'll use it
@@ -144,18 +146,27 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             continue;
         }
     
-        if (strcmp(argv[arg_num], ">") == 0){  // > function skeleton
+        else if (strcmp(argv[arg_num], ">") == 0){  // > function skeleton
+            arg_num++;
+            printf("I'm in the >, %s", argv[arg_num]);
+            write_file(argv[arg_num], output);
             arg_num++;
             continue;
+            
         }
 
-        if (strcmp(argv[arg_num], ">>") == 0){  // piping function skeleton
+        else if (strcmp(argv[arg_num], ">>") == 0){  // piping function skeleton
+            arg_num++;
+            char *temp = read_file(argv[arg_num]);  // read whats already on the file
+            strncat(temp, output, 255 - strlen(output));  // add the ouput to it
+            write_file(argv[arg_num], temp);  // and write it back
+            free(temp);
             arg_num++;
             continue;
         }
         
 
-        if (strcmp(argv[arg_num], "pwd") == 0){
+        else if (strcmp(argv[arg_num], "pwd") == 0){
             char *cwd = pwd();
             output[0] = '\0';
             input[0] = '\0'; // if we have a new command that takes no input, than the previous input is null
@@ -168,7 +179,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             arg_num++;
             continue;
         }
-        if (strcmp(argv[arg_num], "cd") == 0) {
+        else if (strcmp(argv[arg_num], "cd") == 0) {
             arg_num += 1; // consume the cd
             if (input[0] == '\0'){ // if we don't have outside input
                 if(strcmp(argv[arg_num],"<") == 0){ // if it's this character
@@ -205,7 +216,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
         }
         }
 
-        if (strcmp(argv[arg_num], "export") == 0) {
+        else if (strcmp(argv[arg_num], "export") == 0) {
             arg_num++; // consume the export
             if (input[0] == '\0'){ // if we don't have outside input
                 if(strcmp(argv[arg_num],"<") == 0){
@@ -236,7 +247,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             }
         }
 
-        if (strcmp(argv[arg_num], "echo") == 0){
+        else if (strcmp(argv[arg_num], "echo") == 0){
             arg_num++; // make is so we're looking at the arguments
             output[0] = '\0';
             char piece[512]; // if we're echoing, we're starting with a new output
@@ -320,6 +331,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
                     }
                     arg_num++;
                     output = run_command(output);
+        
 
 
                     if(redirect_input){
@@ -345,7 +357,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
     }
 
     // now we're done running arguments
-    free(input);
+    fflush(stdin);
     return output;
 }
 

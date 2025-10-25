@@ -321,6 +321,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
                     arg_num++;
                     output = run_command(output);
 
+
                     if(redirect_input){
                         dup2(saved_stdin, STDIN_FILENO);
                         close(saved_stdin);

@@ -8,6 +8,7 @@
 #include <stdbool.h> // booleans
 #include <ctype.h> // for isalnum()
 #include <sys/syscall.h> // for system calls
+#include <fcntl.h> // for file IO
 
 char **split_into_args(const char *input);
 char *run_args(char **argv);

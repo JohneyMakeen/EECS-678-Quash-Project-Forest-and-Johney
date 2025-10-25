@@ -287,24 +287,46 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             // it might be a linux system function, so we need to prepare it
             output[0] = '\0'; // if we're changing it, we're starting with a new output
             if (input[0]=='\0'){
-                for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stopping symbol
-                    if (strcmp(argv[arg_num],"|" ) == 0 || 
-                        strcmp(argv[arg_num],">" ) == 0 || 
-                        strcmp(argv[arg_num],"#") == 0 || 
-                        strcmp(argv[arg_num],">>" ) == 0){
-                        arg_num--; // just to ensure we don't go past this later
-                        break; // if there's any strings that break the regular flow of the function
+                  // if having no unique input
+                    int redirect_input = 0;  // just something to see if we use stdin or not
+                    int saved_stdin = -1;
+                    for (;argv[arg_num] != NULL ; arg_num++){ // while there isn't a stopping symbol
+                        if (strcmp(argv[arg_num],"|" ) == 0 || 
+                            strcmp(argv[arg_num],">" ) == 0 || 
+                            strcmp(argv[arg_num],"#") == 0 || 
+                            strcmp(argv[arg_num],">>" ) == 0){
+                            arg_num--; // just to ensure we don't go past this later
+                            break; // if there's any strings that break the regular flow of the function
+                        }
+                        if (strcmp(argv[arg_num],"<") == 0){  // if we're needing to take input from a file
+                            arg_num++; // stop looking at the <
+                            int fd = open(argv[arg_num], O_RDONLY);
+                            if (fd < 0) {
+                                perror("Cannot open input file");
+                                break;
+                            }
+                            saved_stdin = dup(STDIN_FILENO);
+                            dup2(fd, STDIN_FILENO);
+                            close(fd);
+                            redirect_input = 1;
+                        }else{
+                            if (output[0] == '\0'){  // if output is empty
+                                strcpy(output, argv[arg_num]);  // just set it equal to the argument
+                            }
+                            else{
+                                strncat(output, " ", strlen(" "));
+                                strncat(output, argv[arg_num], strlen(argv[arg_num])); // concatinate the two together
+                        }}
                     }
-                    if (output[0] == '\0'){  // if output is empty
-                        strcpy(output, argv[arg_num]);  // just set it equal to the argument
-                    }else{
-                        strncat(output, " ", strlen(" "));
-                        strncat(output, argv[arg_num], strlen(argv[arg_num])); // concatinate the two together
+                    arg_num++;
+                    output = run_command(output);
+
+                    if(redirect_input){
+                        dup2(saved_stdin, STDIN_FILENO);
+                        close(saved_stdin);
                     }
-                }
-                arg_num++;
-                output = run_command(output);
-            }else{  // if we have outside input
+
+                }else{  // if we have outside input from a pipe
                 if (output[0] == '\0'){
                     strcpy(output, argv[arg_num]); // make it so the output has the linux command
                 }

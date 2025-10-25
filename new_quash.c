@@ -1,79 +1,99 @@
 #include "quash.h"
 
-static void free_argv(char **argv) {
-    if (!argv) return;
-    for (int i = 0; argv[i] != NULL; i++) free(argv[i]);
-    free(argv);
+static void sfree(char **p) { //safe free for heap stringsl also NUlls the pointer to avoid double free errors 
+    if (p && *p) { free(*p); *p = NULL;}
 }
+
+static inline void clear_buf(char *s) {//clear a writeable string buffer without changing its current allocation
+    if (s) s[0] = '\0';
+} 
+// frees a Null-terminated array of C strings created with strdup () calling malloc() to allocate new memory for each string.
+// maloc() and realloc() is also directly used to allocate the array that holdes the C strings
+static void free_argv(char **argv) { 
+    if (!argv) return; // nothing to free if the array pointer is NULL
+    for (int i = 0; argv[i] != NULL; i++) free(argv[i]); //Free each string
+    free(argv); // then free the array itself 
+}
+
+/* This will be our background job representation by the shell:
+id : shell-visible job id (1 ,2, 3..etc) that we assign
+pid: OS process id 
+cmdline: human-readable command line we ran 
+active: determines weather if this slot is currently in use or not
+*/
 typedef struct {
     int   id;
     pid_t pid;
     char *cmdline;
     bool active;
 } Job;
-#define MAX_JOBS 128
-static Job jobs[MAX_JOBS];
-static int next_jobid = 1;
-static volatile sig_atomic_t count_of_dead_children = 0;
+#define MAX_JOBS 128 //maximum concurrent background we track
+static Job jobs[MAX_JOBS]; //fixed-job size job table
+static int next_jobid = 1; // Next job id to assign when we add a job 
 
-static int jobs_add(pid_t pid, const char *cmdline) {
+static int jobs_add(pid_t pid, const char *cmdline) { // from here this is how we add our background jobs to the fixed size array table. 
+                                                        
     for (int i = 0; i < MAX_JOBS; i++) {
-        if (!jobs[i].active) {
-            jobs[i].active = true;
-            jobs[i].pid = pid;
-            jobs[i].id = next_jobid++;
-            jobs[i].cmdline = strdup(cmdline ? cmdline : "");
-            return jobs[i].id;
-        }
+        if (!jobs[i].active) { // find the first free row
+            jobs[i].active = true; //mark that we are currently using it
+            jobs[i].pid = pid; //store the child's process ID
+            jobs[i].id = next_jobid++; // assign a shell-visible ID 
+            jobs[i].cmdline = strdup(cmdline ? cmdline : ""); // allocate new memmory, and store a copy of the command line string )or an empty string if cmdline was NULL) in jobs[i].cmdline
+            return jobs[i].id; //return the job id to print and use command &
+        } /* for deeper understanding, eadh job needs its own copy of the command line test so that later
+        when quash lists or  completes all of its jobs. it can be able to print line 62 without any issues
+        */
     }
-    return -1;
+    return -1; //if all slots are full, then return -1, to signal that something went wrong
 }
 
-static Job* jobs_find_by_pid(pid_t pid) {
-    for (int i = 0; i < MAX_JOBS; i++) 
-        if (jobs[i].active && jobs[i].pid == pid) return &jobs[i];
-    return NULL;
+static Job* jobs_find_by_pid(pid_t pid) { // goal: locate the job that corresponds to the specific child process when jobs is called, 
+    for (int i = 0; i < MAX_JOBS; i++)  //searching throughout the table
+        if (jobs[i].active && jobs[i].pid == pid)  //return the live row matching at the specific pid
+        return &jobs[i];  
+    return NULL; //if yhere is nothing found, unkown pid
 }
 
-static void jobs_mark_done(pid_t pid) {
-    Job *j = jobs_find_by_pid(pid);
+static void jobs_mark_done(pid_t pid) {// when the background child exists, we print a completed statement, and free its row to avoid memory leakage
+    Job *j = jobs_find_by_pid(pid); // look up which row corresponds to the finished child
     if (j) {
-        printf("Completed: [%d] %d %s\n", j->id, j->pid, j->cmdline);
-        fflush(stdout);
-        j->active = false;
-        free(j->cmdline);
-        j->cmdline = NULL;
+        printf("Completed: [%d] %d %s\n", j->id, j->pid, j->cmdline); //if found, print the completed statement
+        fflush(stdout); //making sure the message isnt stuck in a buffer
+        j->active = false; //frees the slot for future jobs
+        free(j->cmdline); // Release the stored command string
+        j->cmdline = NULL; //pointer to avoid any sort of accidental resue. once one of the jobs is completted, move on to the next
     }
 }
 
-static void jobs_list(void) {
-    for (int i = 0; i <MAX_JOBS; i++) {
+static void jobs_list(void) {//prints the list of the currently running background jobs in shell cylce
+    for (int i = 0; i <MAX_JOBS; i++) { //walking through the table amd looking only for jobs that are currently running
         if (jobs[i].active) {
-            printf("[%d] %d %s &\n", jobs[i].id, jobs[i].pid, jobs[i].cmdline);
+            printf("[%d] %d %s &\n", jobs[i].id, jobs[i].pid, jobs[i].cmdline); //print the jobs that ae  running and their details
         }
     }
-    fflush(stdout);
+    fflush(stdout); //prints immediately so it is not stuck in a buffer
 }
 
-static void sigchld_handler(int sig) {
+static void sigchld_handler(int sig) {// as soon as a child finshes/stops, we check which child has finished, mark it as done and clear it from memory. avoiding zombie processes
     (void)sig;
     int status;
     pid_t pid;
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) { //checks if any child processes have finished, WNOHANG prevents the code from being blocked, and not immedieately ending if no child is found
         jobs_mark_done(pid);
     }
 }
 
-static void join_argv(char *const *argv, char *out, size_t outcap) {
-    out[0] = '\0';
-    for (int i = 0; argv[i]; i++) {
-        if (i && strlen(out) + 1 < outcap)
-            strncat(out, " ", outcap - 1 - strlen(out));
-        strncat(out, argv[i], outcap - 1 - strlen(out));
+static void join_argv(char *const *argv, char *out, size_t outcap) {// turn an argv array intp a human readable cmdline string. 
+    //we then bound all appends to avoid overruns while trying keep as much as we can. 
+    out[0] = '\0'; //start with a null buffer
+    for (int i = 0; argv[i]; i++) { //for each token in the vector
+        if (i && strlen(out) + 1 < outcap) //if it is not the first token, add a seperating space
+            strncat(out, " ", outcap - 1 - strlen(out)); //append a space
+        strncat(out, argv[i], outcap - 1 - strlen(out)); //append the token
     }
 }
 
-static bool is_builtin(const char *s) {
+static bool is_builtin(const char *s) { //since builtins are handed by the shell itself, and not by the user executing it: This will help make sure that the user is not launching an external program
     return s && 
     (!strcmp(s, "echo") || !strcmp(s, "pwd") || !strcmp(s, "cd") || 
     !strcmp(s, "export") || !strcmp(s, "jobs") || !strcmp(s, "kill") ||
@@ -92,11 +112,11 @@ int main(void){
 
     printf("Welcome to Johney and Forest Quash!\n");
 
-    struct sigaction sa = {0};
-    sa.sa_handler = sigchld_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
-    sigaction(SIGCHLD, &sa, NULL);
+    struct sigaction sa = {0}; //prepare a sigaction struct
+    sa.sa_handler = sigchld_handler; // routes sighild to our sigchildhandler function
+    sigemptyset(&sa.sa_mask); //makes sure we dont block other signals while being inside the handler
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; //this helps with restarting syscalls and not terminating the process. ignore child stop/continue events
+    sigaction(SIGCHLD, &sa, NULL); //tells OS to use this signal handler 
 
 
     while(1){ // infinite loop until it recieves the exit command
@@ -152,8 +172,10 @@ int main(void){
         result = run_args(argv);  // runs the arguments
 
         printf("%s\n", result); // prints out the end result of the run_args function
+        free(result);
+        result = NULL;
 
-        // now to free up memory
+        // now to free up memory57
         for (int i = 0; argv[i] != NULL; i++) {
             free(argv[i]);  // free up each arg
         }
@@ -249,6 +271,9 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
     } else {
         int jid = jobs_add(pid, cmdline);
         printf("Background job started: [%d] %d %s &\n", jid, pid, cmdline);
+        if (jid == -1) {
+            fprintf(stderr, "Error: too many background jobs\n");
+        }
         fflush(stdout);
     }
     free(input);
@@ -260,6 +285,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
         // printf("curr string: %s\n", argv[arg_num]); // helper function when need be
         if (strcmp(argv[arg_num], "|") == 0){  // piping function skeleton
             // printf("I'm in the | function! cur arg: %s, next arg: %s, cur arg num:%d\n", argv[arg_num], argv[arg_num+1], arg_num);
+            sfree(&input); //free the old input buffer first
             input = strdup(output); // if the output from the previous function has been defined, we'll use it
             printf("input: %s\n", input);
             arg_num++;
@@ -294,10 +320,11 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             arg_num += 1; // consume the cd
             if (input[0] == '\0'){ // if we don't have outside input
                 if(strcmp(argv[arg_num],"<") == 0){ // if it's this character
-                    cd(read_file(argv[arg_num+1])); // then open the file in the next arg_num val and cd into it
+                    char *tmp = read_file(argv[arg_num+1]); // then open the file in the next arg_num val and cd into it
+                    cd(tmp);
+                    free(tmp);
                     arg_num++;
-                    output[0] = '\0';
-                    output = "";
+                    clear_buf(output); //keep using the existing heap buffer
                     if (argv[arg_num] != NULL) arg_num += 2;
                     else arg_num += 1;
                     continue;
@@ -308,7 +335,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
                     // if (msg && msg[0] != '\0') {
                     //     strncat(output, msg, 255 - strlen(output));
                     // }
-                    output = "";
+                    clear_buf(output); //keep using the existing heap buffer
                     if (argv[arg_num] != NULL) arg_num += 2;
                     else arg_num += 1;
                     continue;
@@ -320,7 +347,7 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             //     printf("%s",msg);
             //     strncat(output, msg, 255 - strlen(output));
             // }
-            output = "";
+           clear_buf(output); //keep using the existing heap buffer
             input[0] = '\0';
 
             continue;
@@ -331,7 +358,9 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
             arg_num++; // consume the export
             if (input[0] == '\0'){ // if we don't have outside input
                 if(strcmp(argv[arg_num],"<") == 0){
-                    char *msg = export(read_file(argv[arg_num + 1]));
+                    char *tmp = export(read_file(argv[arg_num + 1]));
+                    char *msg = export(tmp);
+                    free(tmp);
                     output[0] = '\0';
                     if (msg && msg[0] != '\0') {
                         strncat(output, msg, 255 - strlen(output));
@@ -448,14 +477,28 @@ char *run_args(char **argv){  // Loop that can take it's original output as a la
                     }
                 }
                 arg_num++;
-                output = run_command(output);
+                { //help with memory leakage
+                    char *cmd = strdup(output); //safe copy of the command string
+                    sfree(&output); //free old 256-byte buffer
+                    output = run_command(cmd); //run and get a new heap string
+                    free(cmd); //free the temp cmd copy
+                    if(!output) output = strdup(""); //prevent a crash if a command does fail
+                }
             }else{  // if we have outside input
                 if (output[0] == '\0'){
                     strcpy(output, argv[arg_num]); // make it so the output has the linux command
                 }
                 strncat(output, " ", 1);
                 strncat(output, input, strlen(input));
-                output = run_command(output);
+                {
+                    char *cmd = strdup(output);
+                    sfree(&output);
+                    output = run_command(cmd);
+                    free(cmd);
+                    if (!output) output = strdup("");
+                    input[0] = '\0';
+                    arg_num++;
+                }
                 input[0] = '\0'; // now we need to clear the input
                 arg_num++;
                 }
@@ -658,13 +701,18 @@ char* read_file(const char* filename) { // takes in a file name, exports out a s
     FILE *file = fopen(filename, "r");
     if (!file) { // if the file doesn't open
         perror("Failed to open file");
-        return "";
+        char *empty = malloc(1);
+        if (empty) empty[0] = '\0';
+        return empty;
     }
+    
     char *buffer = malloc(255); // how many bytes we're storing
     if (!buffer) {
         perror("malloc failed");
         fclose(file);
-        return "";
+        char *empty = malloc(1);
+        if (empty) empty[0] = '\0';
+        return empty;
     }
 
     // max of 256 bytes
